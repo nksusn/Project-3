@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: node:18-alpine
+        ports:
+        - containerPort: 3000
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /app
+          cd /app
+          cat > server.js << 'EOF'
+          const express = require("express");
+          const app = express();
+          const port = 3000;
+          
+          app.use(express.json());
+          
+          // Log all requests for debugging
+          app.use((req, res, next) => {
+            console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+            next();
+          });
+          
+          app.get("/health", (req, res) => {
+            res.status(200).send("OK");
+          });
+          
+          app.get("/status", (req, res) => {
+            res.json({ status: "running", database: "connected" });
+          });
+          
+          app.get("/api/status", (req, res) => {
+            res.json({ status: "running", database: "connected" });
+          });
+          
+          // Debug endpoint
+          app.get("/debug", (req, res) => {
+            res.json({
+              url: req.url,
+              baseUrl: req.baseUrl,
+              originalUrl: req.originalUrl,
+              path: req.path,
+              headers: req.headers
+            });
+          });
+          
+          // Catch-all route
+          app.use("*", (req, res) => {
+            res.json({
+              message: "Endpoint not found",
+              url: req.originalUrl
+            });
+          });
+          
+          app.listen(port, "0.0.0.0", () => {
+            console.log(`Backend running on port ${port}`);
+          });
+          EOF
+          
+          npm init -y
+          npm install express --no-save
+          node server.js

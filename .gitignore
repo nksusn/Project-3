@@ -1,0 +1,33 @@
+# Node.js
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.exe
+
+# Kubernetes
+kubeconfig
+
+# Environment variables
+.env
+.secrets.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Build directories
+build/
+dist/

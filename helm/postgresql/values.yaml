@@ -1,0 +1,58 @@
+image:
+  repository: postgres
+  tag: "14"
+  pullPolicy: IfNotPresent
+
+db:
+  user: ""
+  password: ""
+  name: ""
+
+service:
+  port: 5432
+  type: ClusterIP
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  storageClass: gp3
+  existingClaim: postgres-pvc
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+existingSecret: db-secrets
+replicaCount: 1
+
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 20
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+serviceAccount:
+  create: false
+  annotations: {}
+  automount: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80

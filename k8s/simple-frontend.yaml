@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+      listen 80;
+      
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+      }
+      
+      location /api/ {
+        proxy_pass http://backend:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+      }
+      
+      location /health {
+        return 200 "healthy\n";
+      }
+    }
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Nebulance EKS App</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        h1 { color: #333; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 20px; background-color: #f5f5f5; border-radius: 5px; margin-bottom: 20px; }
+        button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        .error { color: red; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Nebulance EKS Application</h1>
+        <div class="status" id="status">Checking backend status...</div>
+        <button onclick="checkStatus()">Check Backend Status</button>
+      </div>
+      <script>
+        function checkStatus() {
+          document.getElementById('status').innerText = 'Connecting to backend...';
+          
+          fetch('/api/status')
+            .then(response => {
+              if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+              }
+              return response.json();
+            })
+            .then(data => {
+              document.getElementById('status').innerText = 
+                `Backend Status: ${data.status}, Database: ${data.database}`;
+            })
+            .catch(error => {
+              document.getElementById('status').innerHTML = 
+                `<span class="error">Error connecting to backend: ${error.message}</span>`;
+              console.error('Error:', error);
+            });
+        }
+        
+        // Check status on page load
+        window.onload = checkStatus;
+      </script>
+    </body>
+    </html>

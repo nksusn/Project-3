@@ -1,0 +1,49 @@
+image:
+  repository: nksusn/eks-app-frontend
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8080
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+livenessProbe:
+  path: /health
+  port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  path: /
+  port: 8080
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+serviceAccount:
+  create: false
+  annotations: {}
+  automount: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []

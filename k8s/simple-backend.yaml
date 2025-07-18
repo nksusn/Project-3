@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: node:18-alpine
+        ports:
+        - containerPort: 3000
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /app
+          cd /app
+          echo 'const http = require("http");
+          
+          const server = http.createServer((req, res) => {
+            console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+            
+            if (req.url === "/health") {
+              res.writeHead(200);
+              res.end("OK");
+              return;
+            }
+            
+            if (req.url === "/api/status" || req.url === "/status") {
+              res.writeHead(200, {"Content-Type": "application/json"});
+              res.end(JSON.stringify({
+                status: "running",
+                database: "connected"
+              }));
+              return;
+            }
+            
+            res.writeHead(404, {"Content-Type": "application/json"});
+            res.end(JSON.stringify({
+              message: "Not found",
+              path: req.url
+            }));
+          });
+          
+          server.listen(3000, "0.0.0.0", () => {
+            console.log("Backend server running on port 3000");
+          });' > server.js
+          
+          node server.js

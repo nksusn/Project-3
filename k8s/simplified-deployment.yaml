@@ -1,0 +1,262 @@
+---
+# PostgreSQL PV
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: gp3
+  hostPath:
+    path: /tmp/postgres-data
+    type: DirectoryOrCreate
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "postgres"
+        - name: POSTGRES_DB
+          value: "nebulance"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+# PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3
+  volumeName: postgres-pv
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  selector:
+    app: postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: node:18-alpine
+        ports:
+        - containerPort: 3000
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /app
+          cd /app
+          echo 'const express = require("express");
+          const app = express();
+          const port = 3000;
+          
+          app.use(express.json());
+          
+          app.get("/health", (req, res) => {
+            res.status(200).send("OK");
+          });
+          
+          app.get("/api/status", (req, res) => {
+            res.json({ status: "running", database: "connected" });
+          });
+          
+          // Add a catch-all route for API requests
+          app.use("/api/*", (req, res) => {
+            res.json({ message: "API endpoint not found", path: req.path });
+          });
+          
+          app.listen(port, () => {
+            console.log(`Backend running on port ${port}`);
+          });' > server.js
+          npm init -y
+          npm install express --no-save
+          node server.js
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 3000
+    targetPort: 3000
+  type: LoadBalancer
+---
+# Frontend ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+      listen 80;
+      
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+      }
+      
+      location /api/ {
+        proxy_pass http://backend:3000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+      }
+      
+      location /health {
+        return 200 "healthy\n";
+      }
+    }
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Nebulance EKS App</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        h1 { color: #333; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 20px; background-color: #f5f5f5; border-radius: 5px; }
+        button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Nebulance EKS Application</h1>
+        <div class="status" id="status">Checking backend status...</div>
+        <button onclick="checkStatus()">Check Backend Status</button>
+      </div>
+      <script>
+        function checkStatus() {
+          document.getElementById('status').innerText = 'Connecting to backend...';
+          fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+              document.getElementById('status').innerText = 
+                `Backend Status: ${data.status}, Database: ${data.database}`;
+            })
+            .catch(error => {
+              document.getElementById('status').innerText = 
+                `Error connecting to backend: ${error.message}`;
+            });
+        }
+        
+        // Check status on page load
+        window.onload = checkStatus;
+      </script>
+    </body>
+    </html>
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+        - name: nginx-html
+          mountPath: /usr/share/nginx/html/index.html
+          subPath: index.html
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+          items:
+          - key: default.conf
+            path: default.conf
+      - name: nginx-html
+        configMap:
+          name: nginx-config
+          items:
+          - key: index.html
+            path: index.html
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer

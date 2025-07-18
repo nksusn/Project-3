@@ -1,0 +1,52 @@
+image:
+  repository: nksusn/eks-app-backend
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+service:
+  type: ClusterIP
+  port: 3000
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+existingSecrets:
+  - app-secrets
+  - db-secrets
+
+livenessProbe:
+  path: /health
+  port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  path: /health
+  port: 3000
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+serviceAccount:
+  create: false
+  annotations: {}
+  automount: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
